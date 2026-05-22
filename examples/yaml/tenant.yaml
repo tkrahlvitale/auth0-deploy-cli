@@ -1,0 +1,602 @@
+# Auth0-Deploy-CLI Tenant YAML Configuration
+
+tenant:
+  # Any tenant settings can go here https://auth0.com/docs/api/management/v2#!/Tenants/get_settings
+  friendly_name: 'Auth0 Deploy Example'
+
+pages:
+  - name: "login"
+    html: "pages/login.html"
+
+  - name: "password_reset"
+    html: "pages/password_reset.html"
+
+  - name: "guardian_multifactor"
+    html: "pages/guardian_multifactor.html"
+    enabled: false
+
+  - name: "error_page"
+    html: "pages/error_page.html"
+
+
+clients:
+  -
+    name: "My SPA"
+    app_type: "spa"
+    # Add other client settings https://auth0.com/docs/api/management/v2#!/Clients/post_clients
+  -
+    name: "My M2M"
+    app_type: "non_interactive"
+    # Add other client settings https://auth0.com/docs/api/management/v2#!/Clients/post_clients
+  -
+    name: "My Native app"
+    app_type: native
+    mobile:
+      android:
+        app_package_name: com.my.android.id
+    native_social_login:
+      google:
+        enabled: true
+    oidc_logout:
+      backchannel_logout_urls:
+        - "https://example.com/logout"
+      backchannel_logout_initiators:
+        mode: "custom"
+        selected_initiators:
+          - "rp-logout"
+          - "idp-logout"
+      backchannel_logout_session_metadata:
+        include: true
+    # Add other client settings https://auth0.com/docs/api/management/v2#!/Clients/post_clients
+  -
+    name: "My Resource Server Client"
+    app_type: "resource_server"
+    resource_server_identifier: "https://##ENV##.myapp.com/api/v1"
+  -
+    name: "My Okta OIN Client"
+    app_type: "regular_web"
+  -
+    name: "My Express App"
+    app_type: "regular_web"
+    express_configuration:
+      initiate_login_uri_template: "https://myapp.com/sso/start?org={organization_name}&conn={connection_name}"
+      user_attribute_profile_id: "My User Attribute Profile"
+      connection_profile_id: "Enterprise SSO Profile"
+      enable_client: true
+      enable_organization: true
+      okta_oin_client_id: "My Okta OIN Client"
+      admin_login_domain: "login.myapp.com"
+  -
+    name: "My Token Exchange App"
+    app_type: "regular_web"
+    grant_types:
+      - "authorization_code"
+      - "refresh_token"
+      - "client_credentials"
+      - "urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token"
+    token_exchange:
+      allow_any_profile_of_type:
+        - "custom_authentication"
+        - "on_behalf_of_token_exchange"
+  -
+    name: "My CIMD Client"
+    external_client_id: "https://mcpserver.example.com/.well-known/client.json"
+    app_type: "regular_web"
+    grant_types:
+      - "authorization_code"
+      - "refresh_token"
+    oidc_conformant: true
+
+databases:
+  - name: "users"
+    enabled_clients:
+      - "My SPA"
+    options:
+      enabledDatabaseCustomization: true
+      customScripts:
+        login: "databases/users/login.js"
+        create: "databases/users/create.js"
+        delete: "databases/users/delete.js"
+        get_user: "databases/users/get_user.js"
+        change_email: "databases/users/change_email.js"
+        change_password: "databases/users/change_password.js"
+        verify: "databases/users/verify.js"
+      attributes:
+        email:
+          unique: true  # Default: true. Set to false to allow non-unique emails
+          identifier:
+            active: true
+          profile_required: true
+          verification_method: "link"
+        username:
+          identifier:
+            active: false  # Set to true when email.unique is false
+          profile_required: false
+      # custom_password_hash:  # (Early Availability) Reference action by name
+      #   action_id: "MyPasswordHashAction"
+      #   hash_algorithm: "bcrypt"
+
+connections:
+  - name: "myad-waad"
+    strategy: "waad"
+    enabled_clients:
+      - "My SPA"
+    options:
+      tenant_domain: 'office.com'
+      client_id: 'some_client_id'
+      client_secret: 'some_client_secret'
+      domain: 'office.com'
+      waad_protocol: 'openid-connect'
+      api_enable_users: true
+      basic_profile: true
+      ext_profile: true
+      ext_groups: true
+    # Add other connection settings (https://auth0.com/docs/api/management/v2#!/Connections/post_connections)
+
+  - name: "google-workspace"
+    strategy: "google-apps"
+    enabled_clients:
+      - "My SPA"
+    options:
+      domain: "example.com"
+      tenant_domain: "example.com"
+      client_id: 'some_client_id'
+      client_secret: 'some_client_secret'
+      api_enable_groups: true
+      api_enable_users: true
+    directory_provisioning_configuration:
+      mapping:
+        - auth0: "email"
+          idp: "mail"
+        - auth0: "name"
+          idp: "displayName"
+      synchronize_automatically: false
+
+  - name: "enterprise-oidc"
+    strategy: "oidc"
+    enabled_clients:
+      - "My SPA"
+    options:
+      type: "back_channel"
+      issuer: "https://example-idp.com"
+      jwks_uri: "https://example-idp.com/.well-known/jwks.json"
+      token_endpoint_auth_signing_alg: "RS384"
+      id_token_signed_response_algs:
+        - "RS256"
+        - "RS384"
+      token_endpoint_jwtca_aud_format: "token_endpoint"
+
+  - name: "enterprise-okta"
+    strategy: "okta"
+    enabled_clients:
+      - "My SPA"
+    options:
+      type: "back_channel"
+      issuer: "https://example.okta.com/oauth2/default"
+      jwks_uri: "https://example.okta.com/oauth2/default/v1/keys"
+      token_endpoint_auth_signing_alg: "PS256"
+      id_token_signed_response_algs:
+        - "RS256"
+        - "PS256"
+      token_endpoint_jwtca_aud_format: "issuer"
+
+
+resourceServers:
+  -
+    name: "My API"
+    identifier: "https://##ENV##.myapp.com/api/v1"
+    scopes:
+      - value: "update:account"
+        description: "update account"
+      - value: "read:account"
+        description: "read account"
+    # client_id: "if linked to a resource server client (readonly)"
+    # Add other resource server settings (https://auth0.com/docs/api/management/v2#!/Resource_Servers/post_resource_servers)
+  -
+    name: "Auth0 My Account API"
+    identifier: "https://##AUTH0_DOMAIN##/me/"
+    # authorization_policy is only applicable to the My Account API when the acr feature flag is enabled
+    authorization_policy:
+      policy_id: "019b76da-a800-73c9-b656-b349ae415c17"
+
+tokenExchangeProfiles:
+  - name: "Custom Authentication Profile"
+    type: "custom_authentication"
+    subject_token_type: "urn:ietf:params:oauth:token-type:custom"
+    action: "custom-token-exchange-action"
+
+phoneProviders:
+  - name: twilio
+    configuration:
+      sid: "twilio_sid"
+      default_from: "+1234567890"
+      delivery_methods:
+        - text
+        - voice
+    disabled: false
+    credentials:
+      auth_token: "some_auth_token"
+
+phoneTemplates:
+  - type: otp_verify
+    disabled: false
+    content:
+      from: "+12341234567"
+      body:
+        text: "Your verification code is {{ code }}"
+        voice: "Your verification code is {{ code }}"
+  - type: otp_enroll
+    disabled: false
+    content:
+      from: "+12341234567"
+      body:
+        text: "Your enrollment code is {{ code }}"
+
+emailProvider:
+  name: "smtp"
+  enabled: true
+  credentials:
+    smtp_host: "smtp.mailtrap.io"
+    smtp_port: 2525
+    smtp_user: "smtp_user"
+    smtp_pass: "smtp_secret_password"
+
+
+emailTemplates:
+  - template: "verify_email"
+    enabled: true
+    syntax: "liquid"
+    from: "test@email.com"
+    subject: "something"
+    body: "emails/change_email.html"
+
+  - template: "welcome_email"
+    enabled: true
+    syntax: "liquid"
+    from: "test@email.com"
+    subject: "something"
+    body: "emails/change_email.html"
+
+  - template: "reset_email_by_code"
+    enabled: true
+    syntax: "liquid"
+    from: "test@email.com"
+    subject: "something"
+    body: "emails/change_email.html"
+
+
+clientGrants:
+  - client_id: "My M2M"
+    audience: "https://##ENV##.myapp.com/api/v1"
+    scope:
+      - "update:account"
+
+
+guardianFactors:
+  - name: sms
+    enabled: true
+  - name: push-notification
+    enabled: true
+  - name: otp
+    enabled: true
+  - name: email
+    enabled: false
+  - name: duo
+    enabled: false
+
+guardianFactorProviders:
+  - name: sms
+    provider: twilio
+    auth_token: "some_token"
+    sid: "some_sid"
+    messaging_service_sid: "some_message_sid"
+
+guardianFactorTemplates:
+  - name: sms
+    enrollment_message: >-
+      {{code}} is your verification code for {{tenant.friendly_name}}. Please
+      enter this code to verify your enrollment.
+    verification_message: '{{code}} is your verification code for {{tenant.friendly_name}}'
+
+guardianPhoneFactorMessageTypes:
+  message_types:
+    - sms
+    - voice
+
+guardianPhoneFactorSelectedProvider:
+  provider: twilio
+
+guardianPolicies:
+  policies:
+    - all-applications
+
+roles:
+  - name: Admin
+    description: App Admin
+    permissions:
+      - permission_name: 'update:account'
+        resource_server_identifier: 'https://##ENV##.myapp.com/api/v1'
+      - permission_name: 'read:account'
+        resource_server_identifier: 'https://##ENV##.myapp.com/api/v1'
+  - name: User
+    description: App User
+    permissions:
+      - permission_name: 'read:account'
+        resource_server_identifier: 'https://##ENV##.myapp.com/api/v1'
+
+actions:
+  - name: action-example
+    code: ./actions/action-example/code.js
+    dependencies:
+      - name: lodash
+        version: 4.17.21
+    deployed: true
+    secrets:
+      - name: MY_SECRET
+        value: _VALUE_NOT_SHOWN_
+    status: built
+    supported_triggers:
+      - id: post-login
+        version: v1
+
+  - name: send-phone-message
+    code: ./actions/send-phone-message/code.js
+    dependencies:
+      - name: axios
+        version: 1.6.0
+      - name: uuid
+        version: 9.0.0
+    deployed: true
+    secrets: []
+    status: built
+    supported_triggers:
+      - id: send-phone-message
+        version: v1
+    modules:
+      - module_name: notification-helper
+        module_version_number: 1
+
+actionModules:
+  - name: auth-helper
+    code: ./action-modules/auth-helper/code.js
+    dependencies:
+      - name: axios
+        version: 1.6.0
+      - name: jsonwebtoken
+        version: 9.0.0
+    secrets:
+      - name: JWT_SECRET
+        value: ##JWT_SECRET##
+
+  - name: notification-helper
+    code: ./action-modules/notification-helper/code.js
+    dependencies:
+      - name: uuid
+        version: 9.0.0
+    secrets: []
+
+triggers:
+  credentials-exchange: []
+  post-change-password: []
+  post-login:
+    - action_name: action-example
+      display_name: action-example-display-name
+  post-user-registration: []
+  pre-user-registration: []
+  send-phone-message: []
+
+prompts:
+  customText:
+    en:
+      login-id:
+        login-id:
+          invalid-email-format: Email is not valid.
+      passkeys:
+        passkey-enrollment:
+          title: Create a passkey for ${clientName}
+          createButtonText: Create a passkey
+          continueButtonText: Continue without passkeys
+          passkeyBenefit1Title: No need to remember a password
+          passkeyBenefit2Title: Works on all of your devices
+          passkeyBenefit3Title: Keep your account safer
+        passkey-enrollment-local:
+          title: Create a passkey for ${clientName} on this device
+          createButtonText: Create a new passkey
+          continueButtonText: Continue without a new passkey
+          passkeyBenefit1Title: Sign in quickly with this device
+          passkeyBenefit2Title: No need to remember a password
+  enable_ulp_wcag_compliance: false
+  identifier_first: false
+  partials:
+    login:
+      login:
+        form-content-start: >-
+          <div class="custom-login-banner">
+            <p>Welcome! Please log in to continue.</p>
+          </div>
+    signup:
+      signup:
+        form-content-end: >-
+          <div class="custom-signup-footer">
+            <p>By signing up, you agree to our terms and conditions.</p>
+          </div>
+    passkeys:
+      passkeys-enrollment:
+        form-content-start: >-
+          <div class="passkey-enrollment-header">
+            <p>Enhance your account security by creating a passkey.</p>
+            <p>Passkeys provide a faster and more secure way to sign in.</p>
+          </div>
+        secondary-actions-start: >-
+          <div class="passkey-help-link">
+            <a href="https://example.com/passkeys-help" target="_blank">Learn more about passkeys</a>
+          </div>
+      passkeys-enrollment-local:
+        form-footer-end: >-
+          <div class="passkey-local-enrollment-info">
+            <p>This passkey will be saved to this device only.</p>
+          </div>
+  screenRenderers:
+    - signup-id:
+        signup-id: ./prompts/screenRenderSettings/signup-id_signup-id.json
+    - login-passwordless:
+        login-passwordless-email-code: ./prompts/screenRenderSettings/login-passwordless_login-passwordless-email-code.json
+        login-passwordless-sms-otp: ./prompts/screenRenderSettings/login-passwordless_login-passwordless-sms-otp.json
+
+forms:
+  - name: New Kyc form
+    body: ./forms/New Kyc form.json
+flows:
+  - name: Update KYC Name
+    body: ./flows/Update KYC Name.json
+flowVaultConnections:
+  - name: 'New Auth0 M2M Con'
+    app_id: AUTH0
+    setup: '@@SETUP_CONFIG@@'
+
+selfServiceProfiles:
+  - name: self-service profile 1
+    allowed_strategies:
+      - google-apps
+      - keycloak-samlp
+      - okta
+    branding:
+      colors:
+        primary: '#19aecc'
+    customText:
+      en:
+        get-started:
+          introduction: >-
+            Welcome! With <p>only a few steps</p> you'll be able to setup.
+    description:  self-Service  profile 1
+    user_attributes:
+      - name: email
+        description: Email of the User
+        is_optional: false
+      - name: name
+        description: Name of the User
+        is_optional: true
+
+networkACLs:
+  - description: 'Allow Specific Countries'
+    active: true
+    priority: 2
+    rule:
+      action:
+        allow: true
+      scope: 'authentication'
+      match:
+        geo_country_codes: ['US', 'CA']
+
+customDomains:
+  - domain: my_domain.com
+    type: auth0_managed_certs
+    tls_policy: 'recommended'
+    is_default: true
+    domain_metadata:
+      myKey: value
+    relying_party_identifier: domain.com
+
+attackProtection:
+  botDetection:
+    bot_detection_level: medium
+    challenge_password_policy: when_risky
+    challenge_passwordless_policy: when_risky
+    challenge_password_reset_policy: when_risky
+    allowlist:
+      - 192.168.1.0/24
+      - 10.0.0.1
+    monitoring_mode_enabled: false
+  captcha:
+    active_provider_id: friendly_captcha
+    friendly_captcha:
+      site_key: ##CAPTCHA_FRIENDLY_CAPTCHA_SITE_KEY##
+      secret: ##CAPTCHA_FRIENDLY_CAPTCHA_SECRET##
+    recaptcha_v2:
+      site_key: ##CAPTCHA_RECAPTCHA_V2_SITE_KEY##
+      secret: ##CAPTCHA_RECAPTCHA_V2_SECRET##
+    recaptcha_enterprise:
+      site_key: ##CAPTCHA_RECAPTCHA_ENTERPRISE_SITE_KEY##
+      api_key: ##CAPTCHA_RECAPTCHA_ENTERPRISE_API_KEY##
+      project_id: ##CAPTCHA_RECAPTCHA_ENTERPRISE_PROJECT_ID##
+    hcaptcha:
+      site_key: ##CAPTCHA_HCAPTCHA_SITE_KEY##
+      secret: ##CAPTCHA_HCAPTCHA_SECRET##
+    arkose:
+      site_key: ##CAPTCHA_ARKOSE_SITE_KEY##
+      secret: ##CAPTCHA_ARKOSE_SECRET##
+      client_subdomain: my-client-subdomain
+      verify_subdomain: my-verify-subdomain
+      fail_open: false
+  breachedPasswordDetection:
+    enabled: true
+    shields:
+      - block
+      - admin_notification
+    admin_notification_frequency:
+      - immediately
+    method: standard
+  bruteForceProtection:
+    enabled: true
+    shields:
+      - block
+      - user_notification
+    mode: count_per_identifier_and_ip
+    allowlist: []
+    max_attempts: 10
+  suspiciousIpThrottling:
+    enabled: true
+    shields:
+      - block
+      - admin_notification
+    allowlist:
+      - 127.0.0.1
+    stage:
+      pre-login:
+        max_attempts: 100
+        rate: 864000
+      pre-user-registration:
+        max_attempts: 50
+        rate: 1200
+
+connectionProfiles:
+  - name: "Enterprise SSO Profile"
+    organization:
+      show_as_button: "required"
+      assign_membership_on_login: "required"
+    connection_name_prefix_template: "org-{org_name}"
+    enabled_features:
+      - scim
+      - universal_logout
+    strategy_overrides:
+      samlp:
+        enabled_features:
+          - universal_logout
+      oidc:
+        enabled_features:
+          - scim
+          - universal_logout
+  - name: "Basic Connection Profile"
+    organization:
+      show_as_button: "optional"
+      assign_membership_on_login: "optional"
+    enabled_features:
+      - scim
+
+userAttributeProfiles:
+  - name: "My User Attribute Profile"
+    description: "My User Attribute Profile Description"
+    user_attributes:
+      - name: "email"
+        description: "Email"
+        type: "email"
+        required: true
+
+riskAssessment:
+  settings:
+    enabled: false
+  # new_device:
+  #   remember_for: 30
+
+supplementalSignals:
+  akamai_enabled: true

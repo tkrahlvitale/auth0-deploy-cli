@@ -1,0 +1,245 @@
+# Configuring the Deploy CLI
+
+Configuring the Deploy’s CLI is essential for establishing Auth0 credentials as well as generally modifying the behavior of the tool to your specific needs. There are two ways the Deploy CLI can be configured:
+
+- Configuration file (`config.json`)
+- Environment variables
+
+## Configuration file
+
+A standalone JSON file can be used to configure Deploy CLI. This file will usually reside in the root directory of your project and be called `config.json`.
+
+Example **config.json** file:
+
+```json
+{
+  "AUTH0_DOMAIN": "<YOUR_TENANT_DOMAIN>",
+  "AUTH0_CLIENT_ID": "<YOUR_CLIENT_ID>",
+  "AUTH0_ALLOW_DELETE": false
+}
+```
+
+> ⚠️ **NOTE:** Hard-coding credentials is not recommended, and risks secret leakage should this file ever be committed to a public version control system. Instead, passing credentials as [environment variables](#environment-variables) is considered best practice.
+
+### Environment variables
+
+By default, the Deploy CLI ingests environment variables, providing the ability to pass credentials and other configurations to the tool without needing to publish to the `config.json` file. Environment variables can either be used to augment the `config.json` file or replace it altogether depending on the project needs.
+
+Non-primitive configuration values like `AUTH0_KEYWORD_REPLACE_MAPPINGS` and `AUTH0_EXCLUDED` can also be passed in through environment variables so long as these values are properly serialized JSON.
+
+To **disable** the consumption of environment variables for either the `import` or `export` commands, pass the `--env=false` argument.
+
+#### Examples
+
+```shell
+# Deploying configuration for YAML formats without a config.json file
+export AUTH0_DOMAIN=<YOUR_AUTH0_DOMAIN>
+export AUTH0_CLIENT_ID=<YOUR_CLIENT_ID>
+export AUTH0_CLIENT_SECRET=<YOUR_CLIENT_SECRET>
+
+a0deploy import --input_file=local/tenant.yaml
+
+# Disable environment variable ingestion
+a0deploy export -c=config.json --format=yaml --output_folder=local --env=false
+
+# Non-primitive configuration values
+export AUTH0_EXCLUDED='["actions","organizations"]'
+export AUTH0_KEYWORD_REPLACE_MAPPINGS='{"ENVIRONMENT":"dev"}'
+a0deploy export -c=config.json --format=yaml --output_folder=local
+```
+
+### Free Tier
+
+Certain Auth0 resources require a paid plan with a verified credit card on file to manage. On free tier tenants, logStreams need to be excluded in `config.json`. You can also exclude customDomains, if you don't want to add credit card information.
+
+```json
+"AUTH0_EXCLUDED": ["logStreams", "customDomains"]
+```
+
+## Available Configuration Properties
+
+### `AUTH0_DOMAIN`
+
+String. The domain of the target Auth0 tenant.
+
+### `AUTH0_CLIENT_ID`
+
+String. The ID of the designated Auth0 application used to make API requests.
+
+### `AUTH0_CLIENT_SECRET`
+
+String. The secret of the designated Auth0 application used to make API requests.
+
+### `AUTH0_ACCESS_TOKEN`
+
+String. Short-lived access token for Management API from designated Auth0 application. Can be used in replacement to client ID and client secret combination.
+
+### `AUTH0_CLIENT_SIGNING_KEY_PATH`
+
+String. The path to the private key used by the client when facilitating Private Key JWT authentication. Path relative to the working directory. Also note `AUTH0_CLIENT_SIGNING_ALGORITHM` for specifying signing algorithm.
+
+### `AUTH0_CLIENT_SIGNING_ALGORITHM`
+
+String. Specifies the JWT signing algorithms used by the client when facilitating Private Key JWT authentication. Only used in combination with `AUTH0_CLIENT_SIGNING_KEY_PATH`. Accepted values: `RS256`, `RS384`, `PS256`.
+
+### `AUTH0_ALLOW_DELETE`
+
+Boolean. When enabled, will allow the tool to delete resources. Default: `false`.
+
+### `AUTH0_INCLUDED_CONNECTIONS`
+
+Array of strings. Specifies which connections should be managed by the Deploy CLI. When configured, only the connections listed by name will be included in export and import operations. All other connections in the tenant will be completely ignored.
+
+This is particularly useful for:
+
+- Managing only specific connections while preserving others (e.g., self-service SSO connections, third-party integrations)
+- Preventing accidental modifications to connections managed by other systems
+- Isolating connection management to specific subsets of your tenant
+
+**Important:** This setting affects all operations (export and import). Connections not in this list will not appear in exports and will not be modified during imports.
+
+Cannot be used simultaneously with `AUTH0_EXCLUDED_CONNECTIONS`.
+
+#### Example
+
+```json
+{
+  "AUTH0_INCLUDED_CONNECTIONS": ["github", "google-oauth2"]
+}
+```
+
+In the example above, only the `github` and `google-oauth2` connections will be managed. All other connections in the tenant will be ignored.
+
+#### Environment Variable Format
+
+When passing as an environment variable, use JSON array format:
+
+```shell
+# JSON array format
+export AUTH0_INCLUDED_CONNECTIONS='["github","google-oauth2"]'
+
+# Or as a single-line array
+export AUTH0_INCLUDED_CONNECTIONS='["github"]'
+```
+
+### `AUTH0_EXCLUDED`
+
+Array of strings. Excludes entire resource types from being managed, bi-directionally. See also: [excluding resources from management](excluding-from-management.md). Possible values: `actions`, `attackProtection`, `branding`, `clientGrants`, `clients`, `connections`, `customDomains`, `databases`, `emailProvider`, `phoneProviders`, `emailTemplates`, `guardianFactorProviders`, `guardianFactorTemplates`, `guardianFactors`, `guardianPhoneFactorMessageTypes`, `guardianPhoneFactorSelectedProvider`, `guardianPolicies`, `logStreams`, `migrations`, `organizations`, `pages`, `prompts`, `resourceServers`, `roles`, `tenant`, `triggers`, `selfServiceProfiles`.
+
+Cannot be used simultaneously with `AUTH0_INCLUDED_ONLY`.
+
+#### Example
+
+```json
+{
+  "AUTH0_EXCLUDED": ["organizations", "connections", "hooks"]
+}
+```
+
+### `AUTH0_INCLUDED_ONLY`
+
+Array of strings. Dictates which resource types to _only_ manage, bi-directionally. See also: [excluding resources from management](excluding-from-management.md). Possible values: `actions`, `attackProtection`, `branding`, `clientGrants`, `clients`, `connections`, `customDomains`, `databases`, `emailProvider`, `phoneProviders`, `emailTemplates`, `guardianFactorProviders`, `guardianFactorTemplates`, `guardianFactors`, `guardianPhoneFactorMessageTypes`, `guardianPhoneFactorSelectedProvider`, `guardianPolicies`, `logStreams`, `migrations`, `organizations`, `pages`, `prompts`, `resourceServers`, `roles`, `tenant`, `triggers`, `selfServiceProfiles`.
+
+#### Example
+
+```json
+{
+  "AUTH0_INCLUDED_ONLY": ["clients", "connections", "tenant", "branding"]
+}
+```
+
+Cannot be used simultaneously with `AUTH0_EXCLUDED`.
+
+### `AUTH0_KEYWORD_REPLACE_MAPPINGS`
+
+Mapping of specific keywords to facilities dynamic replacement. See also: [keyword replacement](keyword-replacement.md).
+
+#### Example
+
+```json
+{
+  "ENVIRONMENT": "DEV",
+  "ALLOWED_ORIGINS": ["https://dev.test-site.com", "localhost"]
+}
+```
+
+### `AUTH0_PRESERVE_KEYWORDS`
+
+Boolean. When enabled, will attempt to preserve keyword replacement markers in local resource files during export. Otherwise, the remote values will overwrite those manually-placed keyword markers.
+
+This configuration requires the presence of local configuration files and defined keyword replace mappings via the `AUTH0_KEYWORD_REPLACE_MAPPINGS` configuration property.
+
+See also: [Preserving Keywords on Export](keyword-replacement.md#preserving-keywords-on-export).
+
+### `AUTH0_EXPORT_IDENTIFIERS`
+
+Boolean. When enabled, will return identifiers of all resources. May be useful for certain debugging or record-keeping scenarios within a single-tenant context. Default: `false`.
+
+### `AUTH0_EXPORT_ORDERED`
+
+Boolean. When enabled, exports JSON and YAML resources with keys sorted alphabetically, producing stable and deterministic output. Useful for reducing noise in diffs when keys would otherwise appear in non-deterministic order. Default: `false`.
+
+### `EXCLUDED_PROPS`
+
+Provides ability to exclude any unwanted properties from management.
+
+#### Example
+
+```json
+{
+  "connections": ["options.twilio_token"]
+}
+```
+
+### `AUTH0_IGNORE_DRY_RUN_FIELDS`
+
+Object keyed by resource handler type, with values that are arrays of field paths to exclude from `--dry-run` diff comparisons. Useful for suppressing noisy diffs on fields the Management API never returns (e.g. secret values), so dry-run output focuses on changes you can actually verify.
+
+User-supplied fields are merged with the handler's built-in defaults; they do not replace them. Field paths support exact match, `.endsWith('.<field>')` suffix match, and `.endsWith('[<field>]')` suffix match (see `calculateDryRunChanges#shouldIgnoreDryRunField`).
+
+This option only affects `--dry-run` reporting. A non-dry-run import still sends every local field to the Management API.
+
+#### Example
+
+```json
+{
+  "clients": ["client_secret"],
+  "connections": ["options.client_secret"],
+  "actions": ["secrets"],
+  "emailProvider": ["credentials.api_key"]
+}
+```
+
+### `AUTH0_AUDIENCE`
+
+String. Separate value from audience value while retrieving an access token for management API. Useful when default Management API endpoints are not publicly exposed.
+
+### `AUTH0_EXCLUDE_THIRD_PARTY_CLIENTS`
+
+Boolean. When enabled, excludes third-party clients from being managed. Only first-party clients will be included in export and import operations. This is useful when you have Dynamic Client Registration (DCR) enabled and you have a lot of third-party clients in your tenant. Default: `false`.
+
+### `AUTH0_EXCLUDED_RULES`
+
+Array of strings. Excludes the management of specific rules by ID. **Note:** This configuration may be subject to deprecation in the future. See: [excluding resources from management](excluding-from-management.md).
+
+### `AUTH0_EXCLUDED_CLIENTS`
+
+Array of strings. Excludes the management of specific clients by name. **Note:** This configuration may be subject to deprecation in the future. See: [excluding resources from management](excluding-from-management.md).
+
+### `AUTH0_EXCLUDED_DATABASES`
+
+Array of strings. Excludes the management of specific databases by name. **Note:** This configuration may be subject to deprecation in the future. See: [excluding resources from management](excluding-from-management.md).
+
+### `AUTH0_EXCLUDED_CONNECTIONS`
+
+Array of strings. Excludes the management of specific connections by name. **Note:** This configuration may be subject to deprecation in the future. See: [excluding resources from management](excluding-from-management.md).
+
+Cannot be used simultaneously with `AUTH0_INCLUDED_CONNECTIONS`.
+
+### `AUTH0_EXCLUDED_RESOURCE_SERVERS`
+
+Array of strings. Excludes the management of specific resource servers by name. **Note:** This configuration may be subject to deprecation in the future. See: [excluding resources from management](excluding-from-management.md).
+
+---
+
+[[table of contents]](../README.md#documentation)

@@ -1,0 +1,27 @@
+{
+  "AUTH0_DOMAIN": "<YOUR_TENANT>.auth0.com",
+  "AUTH0_CLIENT_ID": "<client_id>",
+  "AUTH0_CLIENT_SECRET": "<client_secret>",
+  "AUTH0_KEYWORD_REPLACE_MAPPINGS": {
+    "AUTH0_TENANT_NAME": "<NAME>",
+    "ENV": "DEV",
+    "SETUP_CONFIG": {
+      "client_id": "<add M2M client id>",
+      "client_secret": "<add M2M client_secret>",
+      "domain": "<add M2M domain>",
+      "type": "OAUTH_APP"
+    },
+    "JWT_SECRET": "<your-jwt-secret-key>"
+  },
+  "AUTH0_ALLOW_DELETE": false,
+  "INCLUDED_PROPS": {
+    "clients": [ "client_secret" ]
+  },
+  "AUTH0_EXCLUDED_RULES": [
+    "rule-1-name",
+    "rule-2-name"
+  ],
+  "EXCLUDED_PROPS": {
+    "connections": [ "options.client_secret" ]
+  }
+}

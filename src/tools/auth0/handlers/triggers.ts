@@ -1,0 +1,136 @@
+import _ from 'lodash';
+import { Management } from 'auth0';
+import DefaultHandler, { order } from './default';
+import constants from '../../constants';
+import log from '../../../logger';
+import { Assets } from '../../../types';
+import { isDryRun, sleep } from '../../utils';
+
+export const schema = {
+  type: 'object',
+  items: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      trigger_id: {
+        type: 'object',
+        properties: {
+          action_name: { type: 'string', enum: constants.ACTIONS_TRIGGERS },
+          display_name: { type: 'string', default: '' },
+        },
+      },
+    },
+  },
+};
+
+function isActionsDisabled(err): boolean {
+  const errorBody = _.get(err, 'originalError.response.body') || {};
+
+  return err.statusCode === 403 && errorBody.errorCode === 'feature_not_enabled';
+}
+
+export default class TriggersHandler extends DefaultHandler {
+  existing: {
+    [key: string]: {
+      action_name: string;
+      display_name: string;
+    };
+  };
+
+  constructor(options: DefaultHandler) {
+    super({
+      ...options,
+      type: 'triggers',
+      id: 'name',
+    });
+  }
+
+  async getType(): Promise<DefaultHandler['existing']> {
+    if (this.existing) {
+      return this.existing;
+    }
+
+    const triggerBindings = {};
+
+    try {
+      const res: Management.ListActionTriggersResponseContent =
+        await this.client.actions.triggers.list();
+      const triggers: string[] = _(res?.triggers).map('id').uniq().value();
+
+      for (let i = 0; i < triggers.length; i++) {
+        const triggerId = triggers[i];
+        let bindings;
+        try {
+          const { data } = await this.client.actions.triggers.bindings.list(
+            triggerId as Management.ActionTriggerTypeEnum
+          );
+
+          bindings = data;
+        } catch (err) {
+          log.warn(`${err.message} (trigger: ${triggerId}). Skipping this trigger and continuing.`);
+
+          bindings = null;
+        }
+
+        if (bindings && bindings.length > 0) {
+          triggerBindings[triggerId] = bindings.map((binding) => ({
+            action_name: binding.action.name,
+            display_name: binding.display_name,
+          }));
+        }
+      }
+
+      this.existing = triggerBindings;
+      return this.existing;
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 501) {
+        return [];
+      }
+
+      if (isActionsDisabled(err)) {
+        log.info('Skipping triggers because Actions is not enabled.');
+        return {};
+      }
+
+      throw err;
+    }
+  }
+
+  @order('80')
+  async processChanges(assets: Assets): Promise<void> {
+    // No API to delete or create triggers, we can only update.
+    const { triggers } = assets;
+
+    // Do nothing if not set
+    if (!triggers) return;
+
+    if (isDryRun(this.config)) {
+      const { update } = await this.calcChanges(assets);
+
+      if (update.length === 0) {
+        return;
+      }
+    }
+
+    await sleep(2000); // Delay to allow newly-deployed actions to register in backend
+
+    await Promise.all(
+      Object.entries(triggers).map(async ([name, data]) => {
+        const bindings = data.map((binding) => ({
+          ref: {
+            type: 'action_name',
+            value: binding.action_name,
+          },
+          display_name: binding.display_name,
+        }));
+
+        await this.client.actions.triggers.bindings.updateMany(
+          name as Management.ActionTriggerTypeEnum,
+          { bindings }
+        );
+        this.didUpdate({ trigger_id: name });
+        this.updated += 1;
+      })
+    );
+  }
+}

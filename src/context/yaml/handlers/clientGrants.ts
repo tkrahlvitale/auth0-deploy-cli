@@ -1,0 +1,60 @@
+import { convertClientIdToName } from '../../../utils';
+import { YAMLHandler } from '.';
+import YAMLContext from '..';
+import { ParsedAsset } from '../../../types';
+import { ClientGrant } from '../../../tools/auth0/handlers/clientGrants';
+import { paginate } from '../../../tools/auth0/client';
+import { Client } from '../../../tools/auth0/handlers/clients';
+
+type ParsedClientGrants = ParsedAsset<'clientGrants', ClientGrant[]>;
+
+async function parse(context: YAMLContext): Promise<ParsedClientGrants> {
+  const { clientGrants } = context.assets;
+
+  if (!clientGrants) return { clientGrants: null };
+
+  return {
+    clientGrants,
+  };
+}
+
+async function dump(context: YAMLContext): Promise<ParsedClientGrants> {
+  let { clients } = context.assets;
+  let { clientGrants } = context.assets;
+
+  if (!clientGrants) return { clientGrants: null };
+
+  if (clients === undefined) {
+    clients = await paginate<Client>(context.mgmtClient.clients.list, {
+      paginate: true,
+      include_totals: true,
+    });
+  }
+
+  // Filter out grants for excluded clients
+  const excludedClientsByNames = (context.assets.exclude && context.assets.exclude.clients) || [];
+  if (excludedClientsByNames.length) {
+    const excludedClientIds = new Set(
+      (clients || [])
+        .filter((c) => c.name !== undefined && excludedClientsByNames.includes(c.name))
+        .map((c) => c.client_id)
+    );
+    clientGrants = clientGrants.filter((grant) => !excludedClientIds.has(grant.client_id));
+  }
+
+  // Convert client_id to the client name for readability
+  return {
+    clientGrants: clientGrants.map((grant) => {
+      const dumpGrant = { ...grant };
+      dumpGrant.client_id = convertClientIdToName(dumpGrant.client_id, clients || []);
+      return dumpGrant;
+    }),
+  };
+}
+
+const clientGrantsHandler: YAMLHandler<ParsedClientGrants> = {
+  parse,
+  dump,
+};
+
+export default clientGrantsHandler;

@@ -1,0 +1,95 @@
+import pages from './pages';
+import clients from './clients';
+import tenant from './tenant';
+import emailProvider from './emailProvider';
+import connections from './connections';
+import databases from './databases';
+import emailTemplates from './emailTemplates';
+import clientGrants from './clientGrants';
+import resourceServers from './resourceServers';
+import guardianFactors from './guardianFactors';
+import guardianFactorProviders from './guardianFactorProviders';
+import guardianFactorTemplates from './guardianFactorTemplates';
+import guardianPhoneFactorMessageTypes from './guardianPhoneFactorMessageTypes';
+import guardianPhoneFactorSelectedProvider from './guardianPhoneFactorSelectedProvider';
+import guardianPolicies from './guardianPolicies';
+import roles from './roles';
+import organizations from './organizations';
+import actions from './actions';
+import actionModules from './actionModules';
+import triggers from './triggers';
+import attackProtection from './attackProtection';
+import riskAssessment from './riskAssessment';
+import branding from './branding';
+import phoneProviders from './phoneProvider';
+import phoneTemplates from './phoneTemplates';
+import logStreams from './logStreams';
+import prompts from './prompts';
+import customDomains from './customDomains';
+import themes from './themes';
+import rules from './rules';
+import rulesConfigs from './rulesConfigs';
+import hooks from './hooks';
+import forms from './forms';
+import flows from './flows';
+import flowVaultConnections from './flowVaultConnections';
+import networkACLs from './networkACLs';
+import userAttributeProfiles from './userAttributeProfiles';
+import connectionProfiles from './connectionProfiles';
+import tokenExchangeProfiles from './tokenExchangeProfiles';
+import supplementalSignals from './supplementalSignals';
+
+import YAMLContext from '..';
+import { AssetTypes } from '../../../types';
+import selfServiceProfiles from './selfServiceProfiles';
+
+export type YAMLHandler<T> = {
+  dump: (context: YAMLContext) => Promise<T>;
+  parse: (context: YAMLContext) => Promise<T>;
+};
+
+const yamlHandlers: { [key in AssetTypes]: YAMLHandler<{ [key: string]: unknown }> } = {
+  rules,
+  rulesConfigs,
+  hooks,
+  pages,
+  databases,
+  clientGrants,
+  resourceServers,
+  clients,
+  connections,
+  tenant,
+  emailProvider,
+  emailTemplates,
+  guardianFactors,
+  guardianFactorProviders,
+  guardianFactorTemplates,
+  roles,
+  guardianPhoneFactorMessageTypes,
+  guardianPhoneFactorSelectedProvider,
+  guardianPolicies,
+  actions,
+  actionModules,
+  organizations,
+  triggers,
+  attackProtection,
+  riskAssessment,
+  branding,
+  phoneProviders,
+  phoneTemplates,
+  logStreams,
+  prompts,
+  customDomains,
+  themes,
+  forms,
+  flows,
+  flowVaultConnections,
+  selfServiceProfiles,
+  networkACLs,
+  userAttributeProfiles,
+  connectionProfiles,
+  tokenExchangeProfiles,
+  supplementalSignals,
+};
+
+export default yamlHandlers;

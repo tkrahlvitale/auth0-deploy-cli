@@ -1,0 +1,425 @@
+import path from 'path';
+import fs, { constants as fsConstants } from 'fs';
+import dotProp from 'dot-prop';
+import _ from 'lodash';
+import log from '../logger';
+import { Asset, Assets, CalculatedChanges, KeywordMappings } from '../types';
+import constants from './constants';
+import { ConfigFunction } from '../configFactory';
+
+export const keywordReplaceArrayRegExp = (key) => {
+  const pattern = `@@${key}@@`;
+  //YAML format supports both single and double quotes for strings
+  const patternWithSingleQuotes = `'${pattern}'`;
+  const patternWithDoubleQuotes = `"${pattern}"`;
+
+  return new RegExp(`${patternWithSingleQuotes}|${patternWithDoubleQuotes}|${pattern}`, 'g');
+};
+
+export const keywordReplaceStringRegExp = (key) => {
+  return new RegExp(`##${key}##`, 'g');
+};
+
+export function keywordArrayReplace(input: string, mappings: KeywordMappings): string {
+  Object.keys(mappings).forEach(function (key) {
+    // Matching against two sets of patterns because a developer may provide their array replacement keyword with or without wrapping quotes. It is not obvious to the developer which to do depending if they're operating in YAML or JSON.
+    const regex = keywordReplaceArrayRegExp(key);
+
+    // Use function-based replacement to prevent $ sequences (e.g., $', $`, $&) from being interpreted as special replacement patterns to fixes issue #1153.
+    input = input.replace(regex, () => JSON.stringify(mappings[key]));
+  });
+  return input;
+}
+
+export function keywordStringReplace(input: string, mappings: KeywordMappings): string {
+  Object.keys(mappings).forEach(function (key) {
+    const regex = keywordReplaceStringRegExp(key);
+    // Use function-based replacement to prevent $ sequences (e.g., $', $`, $&) from being interpreted as special replacement patterns to fixes issue #1153.
+    // @ts-ignore TODO: come back and distinguish strings vs array replacement.
+    input = input.replace(regex, () => mappings[key]);
+  });
+  return input;
+}
+
+export function keywordReplace(input: string | undefined, mappings: KeywordMappings): string {
+  // Replace keywords with mappings within input.
+  if (input === undefined) {
+    return 'undefined';
+  }
+
+  if (mappings && Object.keys(mappings).length > 0) {
+    input = keywordArrayReplace(input, mappings);
+    input = keywordStringReplace(input, mappings);
+  }
+  return input;
+}
+
+// wrapArrayReplaceMarkersInQuotes will wrap array replacement markers in quotes.
+// This is necessary for YAML format in the context of keyword replacement
+// to preserve the keyword markers while also maintaining valid YAML syntax.
+export function wrapArrayReplaceMarkersInQuotes(body: string, mappings: KeywordMappings): string {
+  let newBody = body;
+  Object.keys(mappings).forEach((keyword) => {
+    newBody = newBody.replace(
+      new RegExp('(?<![\'"])@@' + keyword + '@@(?![\'"])', 'g'),
+      `"@@${keyword}@@"`
+    );
+  });
+  return newBody;
+}
+
+export function convertClientNameToId(name: string, clients: Asset[]): string {
+  const found = clients.find((c) => c.name === name);
+  return (found && found.client_id) || name;
+}
+
+export function convertActionNameToId(name: string, actions: Asset[]): string {
+  const found = actions.find((a) => a.name === name);
+  return (found && found.id) || name;
+}
+
+export function convertActionIdToName(id: string, actions: Asset[]): string {
+  const found = actions.find((a) => a.id === id);
+  return (found && found.name) || id;
+}
+
+export function convertClientNamesToIds(names: string[], clients: Asset[]): string[] {
+  const resolvedNames = names.map((name) => ({ name, resolved: false }));
+  const result = clients.reduce((acc: string[], client): string[] => {
+    if (names.includes(client.name)) {
+      const index = resolvedNames.findIndex((item) => item.name === client.name);
+      resolvedNames[index].resolved = true;
+      return [...acc, client.client_id];
+    }
+    return [...acc];
+  }, []);
+  const unresolved = resolvedNames.filter((item) => !item.resolved).map((item) => item.name);
+  // @ts-ignore TODO: come back and refactor to use map instead of reduce.
+  return [...unresolved, ...result];
+}
+
+export function loadFileAndReplaceKeywords(
+  file: string,
+  {
+    mappings,
+    disableKeywordReplacement = false,
+  }: { mappings: KeywordMappings; disableKeywordReplacement: boolean }
+): string {
+  // Load file and replace keyword mappings
+  const f = path.resolve(file);
+  try {
+    fs.accessSync(f, fsConstants.F_OK);
+    if (mappings && !disableKeywordReplacement) {
+      return keywordReplace(fs.readFileSync(f, 'utf8'), mappings);
+    }
+    return fs.readFileSync(f, 'utf8');
+  } catch (error) {
+    throw new Error(`Unable to load file ${f} due to ${error}`);
+  }
+}
+
+export function flatten(list: any[]): any[] {
+  // Flatten an multiple arrays to single array
+  return list.reduce((a, b) => a.concat(Array.isArray(b) ? flatten(b) : b), []);
+}
+
+export function convertJsonToString(obj: { [key: string]: any }, spacing = 0): string {
+  return JSON.stringify(obj, null, spacing);
+}
+
+export function stripFields(obj: Asset, fields: string[]): Asset {
+  // Strip object fields supporting dot notation (ie: a.deep.field)
+  const stripped: string[] = [];
+
+  const newObj = { ...obj };
+  fields.forEach((f) => {
+    if (dotProp.get(newObj, f) !== undefined) {
+      dotProp.delete(newObj, f);
+      stripped.push(f);
+    }
+  });
+
+  if (stripped) {
+    const name = ['id', 'client_id', 'template', 'name'].reduce((n, k) => newObj[k] || n, '');
+    log.debug(`Stripping "${name}" read-only fields ${JSON.stringify(stripped)}`);
+  }
+  return newObj;
+}
+
+export function getEnabledClients(
+  assets: Assets,
+  connection: Asset,
+  existing: Asset[],
+  clients: Asset[]
+): string[] | undefined {
+  // Convert enabled_clients by name to the id
+
+  if (connection.enabled_clients === undefined) return undefined; // If no enabled clients passed in, explicitly ignore from management, preventing unintentional disabling of connection.
+
+  const excludedClientsByNames = (assets.exclude && assets.exclude.clients) || [];
+  const excludedClients = convertClientNamesToIds(excludedClientsByNames, clients);
+  const allExcluded = [...excludedClientsByNames, ...excludedClients];
+  const enabledClients = [
+    ...convertClientNamesToIds(connection.enabled_clients || [], clients).filter(
+      (item) => !allExcluded.includes(item)
+    ),
+  ];
+  // If client is excluded and in the existing connection this client is enabled, it should keep enabled
+  // If client is excluded and in the existing connection this client is disabled, it should keep disabled
+  existing.forEach((conn) => {
+    if (conn.name === connection.name) {
+      excludedClients.forEach((excludedClient) => {
+        if (conn.enabled_clients?.includes(excludedClient)) {
+          enabledClients.push(excludedClient);
+        }
+      });
+    }
+  });
+  return enabledClients;
+}
+
+export function duplicateItems(arr: Asset[], key: string): Asset[] {
+  // Find duplicates objects within array that have the same key value
+  const duplicates = arr.reduce(
+    (accum: { [key: string]: Asset[] }, obj): { [key: string]: Asset[] } => {
+      const keyValue = obj[key];
+      if (keyValue) {
+        if (!(keyValue in accum)) accum[keyValue] = [];
+        accum[keyValue].push(obj);
+      }
+      return accum;
+    },
+    {}
+  );
+  return Object.values(duplicates).filter((g) => g.length > 1);
+}
+
+export function filterExcluded(changes: CalculatedChanges, exclude: string[]): CalculatedChanges {
+  const { del, update, create, conflicts } = changes;
+
+  if (!exclude.length) {
+    return changes;
+  }
+
+  const filter = (list: Asset[]) => list.filter((item) => !exclude.includes(item.name));
+
+  return {
+    del: filter(del),
+    update: filter(update),
+    create: filter(create),
+    conflicts: filter(conflicts),
+  };
+}
+
+export function filterIncluded(changes: CalculatedChanges, include: string[]): CalculatedChanges {
+  const { del, update, create, conflicts } = changes;
+
+  if (!include || !include.length) {
+    return changes;
+  }
+
+  const filter = (list: Asset[]) => list.filter((item) => include.includes(item.name));
+
+  return {
+    del: filter(del),
+    update: filter(update),
+    create: filter(create),
+    conflicts: filter(conflicts),
+  };
+}
+
+export function areArraysEquals(x: any[], y: any[]): boolean {
+  return _.isEqual(x && x.sort(), y && y.sort());
+}
+
+export const obfuscateSensitiveValues = (
+  data: Asset | Asset[] | null,
+  sensitiveFieldsToObfuscate: string[]
+): Asset | Asset[] | null => {
+  if (data === null) return data;
+  if (Array.isArray(data)) {
+    return data.map((asset) => obfuscateSensitiveValues(asset, sensitiveFieldsToObfuscate));
+  }
+
+  const newAsset = { ...data };
+  sensitiveFieldsToObfuscate.forEach((sensitiveField) => {
+    if (dotProp.get(newAsset, sensitiveField) !== undefined) {
+      dotProp.set(newAsset, sensitiveField, constants.OBFUSCATED_SECRET_VALUE);
+    }
+  });
+
+  return newAsset;
+};
+
+const UNRESOLVED_PLACEHOLDER_REGEX = /^(##.+##|@@.+@@)$/;
+
+// Recursively collects all fields in an asset that still contain an unresolved
+// ##...## (string) or @@...@@ (array) keyword placeholder.
+const collectUnresolvedPlaceholders = (
+  data: Asset | null,
+  parentPath = ''
+): { path: string; value: string }[] => {
+  if (data === null || typeof data !== 'object') return [];
+
+  const found: { path: string; value: string }[] = [];
+  Object.keys(data).forEach((key) => {
+    const fullPath = parentPath ? `${parentPath}.${key}` : key;
+    const value = data[key];
+    if (typeof value === 'string' && UNRESOLVED_PLACEHOLDER_REGEX.test(value)) {
+      found.push({ path: fullPath, value });
+    } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      found.push(...collectUnresolvedPlaceholders(value, fullPath));
+    }
+  });
+  return found;
+};
+
+// Throws an error if any field in the asset contains an unresolved ##...## or @@...@@ placeholder,
+// listing all offending fields so the user can fix them before deploying.
+export const validateNoUnresolvedPlaceholders = (
+  data: Asset | null,
+  resourceType: string,
+  resourceName: string
+): Asset | null => {
+  if (data === null) return data;
+
+  const unresolved = collectUnresolvedPlaceholders(data);
+  if (unresolved.length > 0) {
+    const fields = unresolved.map(({ path, value }) => `  - "${path}": ${value}`).join('\n');
+    throw new Error(
+      `Unresolved placeholder(s) found in ${resourceType} "${resourceName}":\n${fields}\nPlease ensure all keyword mappings are defined before deploying.`
+    );
+  }
+
+  return data;
+};
+
+// The reverse of `obfuscateSensitiveValues()`, preventing an obfuscated value from being passed to the API
+export const stripObfuscatedFieldsFromPayload = (
+  data: Asset | Asset[] | null,
+  obfuscatedFields: string[]
+): Asset | Asset[] | null => {
+  if (data === null) return data;
+  if (Array.isArray(data)) {
+    return data.map((asset) => stripObfuscatedFieldsFromPayload(asset, obfuscatedFields));
+  }
+
+  const newAsset = { ...data };
+  obfuscatedFields.forEach((sensitiveField) => {
+    const obfuscatedFieldValue = dotProp.get(newAsset, sensitiveField);
+    if (obfuscatedFieldValue === constants.OBFUSCATED_SECRET_VALUE) {
+      dotProp.delete(newAsset, sensitiveField);
+    }
+  });
+
+  return newAsset;
+};
+
+export const detectInsufficientScopeError = async <T>(
+  fn: Function
+): Promise<
+  | {
+      hadSufficientScopes: true;
+      data: T;
+      requiredScopes: [];
+    }
+  | { hadSufficientScopes: false; requiredScopes: string[]; data: null }
+> => {
+  try {
+    const data = await fn();
+    return {
+      hadSufficientScopes: true,
+      data,
+      requiredScopes: [],
+    };
+  } catch (err) {
+    if (err.statusCode === 403 && err.message.includes('Insufficient scope')) {
+      const requiredScopes = err.message?.split('Insufficient scope, expected any of: ')?.slice(1);
+      return {
+        hadSufficientScopes: false,
+        requiredScopes,
+        data: null,
+      };
+    }
+    throw err;
+  }
+};
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export const isDeprecatedError = (err: { message: string; statusCode: number }): boolean => {
+  if (!err) return false;
+  return !!(err.statusCode === 403 || err.message?.includes('deprecated feature'));
+};
+
+export const isForbiddenFeatureError = (err, type): boolean => {
+  if (err.statusCode === 403) {
+    log.warn(`${err.message};${err.errorCode ?? ''} - Skipping ${type}`);
+    return true;
+  }
+  return false;
+};
+
+// This function masks the secret at the given JSON path in the object with the provided mask value.
+export function maskSecretAtPath({
+  resourceTypeName,
+  maskedKeyName,
+  maskOnObj,
+  keyJsonPath,
+}: {
+  resourceTypeName: string;
+  maskedKeyName: string;
+  maskOnObj: object;
+  keyJsonPath: string;
+}): any {
+  // Replace spaces and special characters with underscores
+  const sanitize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '_');
+  if (dotProp.has(maskOnObj, keyJsonPath)) {
+    const maskValue = `##${sanitize(resourceTypeName)}_${sanitize(
+      maskedKeyName
+    )}_SECRET##`.toUpperCase();
+    dotProp.set(maskOnObj, keyJsonPath, maskValue);
+  }
+  return maskOnObj;
+}
+
+/**
+ * Determines whether third-party clients should be excluded based on configuration.
+ * Checks the AUTH0_EXCLUDE_THIRD_PARTY_CLIENTS config value and returns true if it's
+ * set to boolean true or string 'true'.
+ *
+ * @param configFn - The configuration function to retrieve the config value.
+ * @returns True if third-party clients should be excluded, false otherwise.
+ */
+export const shouldExcludeThirdPartyClients = (configFn: (key: string) => any): boolean => {
+  const value = configFn('AUTH0_EXCLUDE_THIRD_PARTY_CLIENTS');
+  return value === 'true' || value === true;
+};
+
+// Sort guardian factors by name
+export function sortGuardianFactors(factors: Asset[]): Asset[] {
+  // if no factors, return empty array
+  if (!factors || factors.length === 0) return [];
+
+  return factors.sort((a, b) => {
+    const nameA = a.name || '';
+    const nameB = b.name || '';
+
+    if (nameA < nameB) return -1;
+    if (nameA > nameB) return 1;
+    return 0;
+  });
+}
+
+// Check if dry-run flag is enabled
+export function isDryRun(config: ConfigFunction): boolean {
+  if (typeof config !== 'function') return false;
+  return config('AUTH0_DRY_RUN') === true || config('AUTH0_DRY_RUN') === 'true';
+}
+
+// Print a message to the CLI message console
+export function printCLIMessage(message: string): void {
+  process.stdout.write(message + '\n');
+}

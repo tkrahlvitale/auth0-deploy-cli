@@ -1,0 +1,279 @@
+import { Management } from 'auth0';
+
+import DefaultAPIHandler, { order } from './default';
+import { Assets, Auth0APIClient } from '../../../types';
+import log from '../../../logger';
+import { paginate } from '../client';
+import { isDryRun } from '../../utils';
+
+const strategies = ['pingfederate', 'ad', 'adfs', 'waad', 'google-apps', 'okta', 'oidc', 'samlp'];
+const strategyOverrides = {
+  type: 'object',
+  additionalProperties: false,
+  properties: strategies.reduce(
+    (acc, curr) => ({
+      ...acc,
+      [curr]: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          oidc_mapping: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['mapping'],
+            properties: {
+              mapping: {
+                type: 'string',
+              },
+              display_name: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 50,
+              },
+            },
+          },
+          saml_mapping: {
+            type: 'array',
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 128,
+            },
+            minItems: 1,
+            maxItems: 3,
+            uniqueItems: true,
+          },
+          scim_mapping: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 128,
+          },
+        },
+      },
+    }),
+    {}
+  ),
+};
+
+export type UserAttributeProfile = Management.UserAttributeProfile;
+
+export const schema = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      user_id: {
+        type: 'object',
+        properties: {
+          oidc_mapping: {
+            type: 'string',
+            enum: ['sub'],
+            default: 'sub',
+          },
+          saml_mapping: {
+            type: 'array',
+            items: {
+              type: 'string',
+            },
+            minItems: 1,
+            maxItems: 3,
+          },
+          scim_mapping: {
+            type: 'string',
+            default: 'externalId',
+          },
+          strategy_overrides: {
+            type: 'object',
+            properties: strategies.reduce(
+              (acc, curr) => ({
+                ...acc,
+                [curr]: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    oidc_mapping: {
+                      type: 'string',
+                      enum: ['sub', 'oid', 'email'],
+                      minLength: 1,
+                      maxLength: 50,
+                    },
+                    saml_mapping: {
+                      type: 'array',
+                      items: {
+                        type: 'string',
+                      },
+                      minItems: 1,
+                      maxItems: 3,
+                    },
+                    scim_mapping: {
+                      type: 'string',
+                    },
+                  },
+                },
+              }),
+              {}
+            ),
+          },
+        },
+      },
+      user_attributes: {
+        type: 'object',
+        minProperties: 1,
+        maxProperties: 64,
+        additionalProperties: {
+          type: 'object',
+          required: ['description', 'label', 'profile_required', 'auth0_mapping'],
+          additionalProperties: false,
+          properties: {
+            description: {
+              description: 'Description of this attribute',
+              type: 'string',
+              minLength: 1,
+              maxLength: 128,
+            },
+            label: {
+              description: 'Display label for this attribute',
+              type: 'string',
+              minLength: 1,
+              maxLength: 128,
+            },
+            profile_required: {
+              description: 'Whether this attribute is required in the profile',
+              type: 'boolean',
+            },
+            auth0_mapping: {
+              description: 'Auth0 mapping for this attribute',
+              type: 'string',
+              minLength: 1,
+              maxLength: 50,
+            },
+            oidc_mapping: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['mapping'],
+              properties: {
+                mapping: {
+                  type: 'string',
+                },
+                display_name: {
+                  description: 'Display name for the OIDC mapping',
+                  type: 'string',
+                  minLength: 1,
+                  maxLength: 50,
+                },
+              },
+            },
+            saml_mapping: {
+              type: 'array',
+              items: {
+                description: 'SAML mapping field',
+                type: 'string',
+                minLength: 1,
+                maxLength: 128,
+              },
+              minItems: 1,
+              maxItems: 3,
+              uniqueItems: true,
+            },
+            scim_mapping: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 128,
+            },
+            strategy_overrides: strategyOverrides,
+          },
+        },
+      },
+    },
+  },
+};
+
+export const getUserAttributeProfiles = async (
+  auth0Client: Auth0APIClient
+): Promise<UserAttributeProfile[]> => {
+  try {
+    const userAttributeProfiles = await paginate<UserAttributeProfile>(
+      auth0Client.userAttributeProfiles.list,
+      {
+        checkpoint: true,
+        include_totals: true,
+        is_global: false,
+        take: 10,
+      }
+    );
+
+    return userAttributeProfiles;
+  } catch (err) {
+    if (err.statusCode === 404 || err.statusCode === 501) {
+      return [];
+    }
+    if (err.statusCode === 403) {
+      log.debug(
+        'User Attribute Profile with Self-Service SSO is not enabled for this tenant. Please verify `scope` or contact Auth0 support to enable this feature.'
+      );
+      return [];
+    }
+    throw err;
+  }
+};
+
+export default class UserAttributeProfilesHandler extends DefaultAPIHandler {
+  existing: UserAttributeProfile[];
+
+  constructor(options: DefaultAPIHandler) {
+    super({
+      ...options,
+      type: 'userAttributeProfiles',
+      id: 'id',
+      identifiers: ['id', 'name'],
+      stripUpdateFields: ['id'],
+    });
+  }
+
+  async getType() {
+    if (this.existing) return this.existing;
+
+    this.existing = await getUserAttributeProfiles(this.client);
+    return this.existing;
+  }
+
+  @order('50')
+  async processChanges(assets: Assets): Promise<void> {
+    const { userAttributeProfiles } = assets;
+
+    // Do nothing if not set
+    if (!userAttributeProfiles) return;
+
+    const { del, update, create, conflicts } = await this.calcChanges(assets);
+
+    if (isDryRun(this.config)) {
+      if (
+        create.length === 0 &&
+        update.length === 0 &&
+        del.length === 0 &&
+        conflicts.length === 0
+      ) {
+        return;
+      }
+    }
+
+    const changes = {
+      del,
+      update,
+      create,
+      conflicts,
+    };
+
+    log.debug(
+      `Start processChanges for userAttributeProfile [delete:${changes.del.length}] [update:${changes.update.length}], [create:${changes.create.length}]`
+    );
+
+    await super.processChanges(assets, changes);
+  }
+}

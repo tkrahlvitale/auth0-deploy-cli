@@ -1,0 +1,107 @@
+# Using as a CLI
+
+The Deploy CLI can be used as a standalone command line utility. Doing so provides a simple way to manage your Auth0 tenant configuration in CI/CD workflows. Refer to the [Configuring the Deploy CLI](./configuring-the-deploy-cli.md) documentation for a comprehensive list of configuration settings.
+
+## `export` command
+
+Fetching configurations from Auth0 tenant to the local machine.
+
+> **Note**
+> Marketplace Actions (including Auth0-owned marketplace Actions) are not exported. If your tenant uses marketplace Actions, their installation and configuration must be handled manually.
+
+### `--output_folder`, `-o`
+
+Path. Specifies the target directory for configuration files to be written to.
+
+### `--config_file`, `-c`
+
+Path. Specifies the user-defined configuration file (`config.json`). Refer to the list of [all configurable properties](./configuring-the-deploy-cli.md).
+
+### `--format`, `-f`
+
+Options: yaml or directory. Determines the file format of the exported resource configuration files. See: [Available Resource Config Formats](available-resource-config-formats).
+
+### `--export_ids`, `-e`
+
+Boolean. When enabled, will export the identifier fields for each resource. Default: `false`.
+
+### `--export_ordered`, `-s`
+
+Boolean. When enabled, exports resource configuration files with keys sorted alphabetically, producing stable and deterministic output. Useful for reducing noise in diffs. Default: `false`.
+
+### `--env`
+
+Boolean. Indicates if the tool should ingest environment variables or not. Default: `true`.
+
+### `--debug`
+
+Boolean. Enables more verbose error logging; useful during troubleshooting. Default: `false`.
+
+### `--proxy_url`, `-p`
+
+A url for proxying requests. Only set this if you are behind a proxy.
+
+### `--experimental_ea`
+
+Boolean. When enabled, gain early access Auth0 resources support and experimental features. Default: `false`.
+
+### Examples
+
+```shell
+# Fetching Auth0 tenant configuration in the YAML format
+a0deploy export -c=config.json --format=yaml --output_folder=local
+
+# Fetching Auth0 tenant configuration in directory (JSON) format
+a0deploy export -c=config.json --format=directory --output_folder=local
+
+# Fetching Auth0 tenant configurations with IDs of all assets
+a0deploy export -c=config.json --format=yaml --output_folder=local --export_ids=true
+```
+
+## `import` command
+
+Applying configurations from local machine to Auth0 tenant.
+
+> **Note**
+> Marketplace Actions cannot be installed by the Deploy CLI. If your configuration references marketplace Actions, install them manually in the target tenant before running `import`.
+
+### `--input_file`, `-i`
+
+Path. Specifies the location of the resource configuration files. For YAML formats, this will point to the `tenant.yaml` file, for directory formats, this will point to the resource configuration directory.
+
+### `--config_file`, `-c`
+
+Path. Specifies the user-defined configuration file (config.json). Refer to the list of [all configurable properties](./configuring-the-deploy-cli.md).
+
+### `--env`
+
+Boolean. Indicates if the tool should ingest environment variables or not. Default: `true`.
+
+### `--proxy_url`, `-p`
+
+A url for proxying requests. Only set this if you are behind a proxy.
+
+### `--debug`
+
+Boolean. Enables more verbose error logging; useful during troubleshooting. Default: `false`.
+
+### `--experimental_ea`
+
+Boolean. When enabled, gain early access Auth0 resources support and experimental features. Default: `false`.
+
+### Examples
+
+```shell
+# Deploying configuration for YAML formats
+a0deploy import -c=config.json --input_file=local/tenant.yaml
+
+# Deploying configuration for directory format
+a0deploy import -c=config.json --input_file=local
+
+# Deploying configuration with environment variables ignored
+a0deploy import -c=config.json --input_file=local/tenant.yaml --env=false
+```
+
+---
+
+[[table of contents]](../README.md#documentation)

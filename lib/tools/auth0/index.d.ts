@@ -1,0 +1,18 @@
+import { Assets, Auth0APIClient } from '../../types';
+import APIHandler from './handlers/default';
+import { ConfigFunction } from '../../configFactory';
+export type Stage = 'load' | 'validate' | 'processChanges';
+export default class Auth0 {
+    client: Auth0APIClient;
+    config: ConfigFunction;
+    assets: Assets;
+    handlers: APIHandler[];
+    constructor(client: Auth0APIClient, assets: Assets, config: ConfigFunction);
+    runStage(stage: Stage): Promise<void>;
+    validate(): Promise<void>;
+    loadAssetsFromAuth0(): Promise<void>;
+    processChanges(): Promise<void>;
+    dryRun(opts?: {
+        interactive?: boolean;
+    }): Promise<boolean>;
+}

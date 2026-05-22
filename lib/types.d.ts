@@ -1,0 +1,189 @@
+import { Management, ManagementClient } from 'auth0';
+import { PromisePoolExecutor } from 'promise-pool-executor';
+import { Action } from './tools/auth0/handlers/actions';
+import { ActionModule } from './tools/auth0/handlers/actionModules';
+import { Prompts } from './tools/auth0/handlers/prompts';
+import { Tenant } from './tools/auth0/handlers/tenant';
+import { Page } from './tools/auth0/handlers/pages';
+import { LogStream } from './tools/auth0/handlers/logStreams';
+import { Client } from './tools/auth0/handlers/clients';
+import { ClientGrant } from './tools/auth0/handlers/clientGrants';
+import { Theme } from './tools/auth0/handlers/themes';
+import { Form } from './tools/auth0/handlers/forms';
+import { Flow } from './tools/auth0/handlers/flows';
+import { FlowVaultConnection } from './tools/auth0/handlers/flowVaultConnections';
+import { SsProfileWithCustomText } from './tools/auth0/handlers/selfServiceProfiles';
+import { PhoneProvider } from './tools/auth0/handlers/phoneProvider';
+import { PhoneTemplate } from './tools/auth0/handlers/phoneTemplates';
+import { NetworkACL } from './tools/auth0/handlers/networkACLs';
+import { UserAttributeProfile } from './tools/auth0/handlers/userAttributeProfiles';
+import { AttackProtection } from './tools/auth0/handlers/attackProtection';
+import { TokenExchangeProfile } from './tools/auth0/handlers/tokenExchangeProfiles';
+import { RiskAssessment } from './tools/auth0/handlers/riskAssessment';
+import { SupplementalSignals } from './tools/auth0/handlers/supplementalSignals';
+type SharedPaginationParams = {
+    checkpoint?: boolean;
+    paginate?: boolean;
+    is_global?: boolean;
+    is_first_party?: boolean;
+    include_totals?: boolean;
+    id?: string;
+    strategy?: Management.ConnectionStrategyEnum[];
+};
+export type CheckpointPaginationParams = SharedPaginationParams & {
+    from?: string;
+    take?: number;
+};
+export type PagePaginationParams = SharedPaginationParams & {
+    page?: number;
+    per_page?: number;
+};
+export type ApiResponse = {
+    start: number;
+    limit: number;
+    total: number;
+    next?: string;
+} & {
+    [key in AssetTypes]: Asset[];
+};
+export type Auth0APIClient = ManagementClient & {
+    pool: PromisePoolExecutor;
+};
+export type Config = {
+    AUTH0_DOMAIN: string;
+    AUTH0_CLIENT_ID: string;
+    AUTH0_CLIENT_SECRET: string;
+    AUTH0_CLIENT_SIGNING_KEY_PATH: string;
+    AUTH0_CLIENT_SIGNING_ALGORITHM: string;
+    AUTH0_INPUT_FILE: string;
+    AUTH0_ALLOW_DELETE: boolean;
+    AUTH0_EXCLUDED?: AssetTypes[];
+    AUTH0_EXCLUDE_THIRD_PARTY_CLIENTS?: boolean;
+    AUTH0_INCLUDED_ONLY?: AssetTypes[];
+    AUTH0_PRESERVE_KEYWORDS: boolean;
+    EXTENSION_SECRET: string;
+    AUTH0_ACCESS_TOKEN?: string;
+    AUTH0_BASE_PATH?: string;
+    AUTH0_AUDIENCE?: string;
+    AUTH0_API_MAX_RETRIES?: number;
+    AUTH0_MAX_RETRIES?: number;
+    AUTH0_RETRY_INITIAL_DELAY_MS?: number;
+    AUTH0_RETRY_MAX_DELAY_MS?: number;
+    AUTH0_KEYWORD_REPLACE_MAPPINGS?: KeywordMappings;
+    AUTH0_EXPORT_IDENTIFIERS?: boolean;
+    AUTH0_EXPORT_ORDERED?: boolean;
+    AUTH0_CONNECTIONS_DIRECTORY?: string;
+    AUTH0_DRY_RUN?: boolean | 'preview';
+    AUTH0_DRY_RUN_INTERACTIVE?: boolean;
+    AUTH0_DRY_RUN_APPLY?: boolean;
+    AUTH0_IGNORE_DRY_RUN_FIELDS?: {
+        [handlerType: string]: string[];
+    };
+    EXCLUDED_PROPS?: {
+        [key: string]: string[];
+    };
+    INCLUDED_PROPS?: {
+        [key: string]: string[];
+    };
+    AUTH0_INCLUDED_CONNECTIONS?: string[];
+    AUTH0_IGNORE_UNAVAILABLE_MIGRATIONS?: boolean;
+    AUTH0_EXCLUDED_RULES?: string[];
+    AUTH0_EXCLUDED_CLIENTS?: string[];
+    AUTH0_EXCLUDED_DATABASES?: string[];
+    AUTH0_EXCLUDED_CONNECTIONS?: string[];
+    AUTH0_EXCLUDED_RESOURCE_SERVERS?: string[];
+    AUTH0_EXCLUDED_DEFAULTS?: string[];
+    AUTH0_EXPERIMENTAL_EA: boolean;
+};
+export type Asset = {
+    [key: string]: any;
+};
+export type Assets = Partial<{
+    actions: Action[] | null;
+    actionModules: ActionModule[] | null;
+    attackProtection: AttackProtection | null;
+    riskAssessment: RiskAssessment | null;
+    branding: (Asset & {
+        templates?: {
+            template: string;
+            body: string;
+        }[] | null;
+    }) | null;
+    phoneProviders: PhoneProvider[] | null;
+    phoneTemplates: PhoneTemplate[] | null;
+    clients: Client[] | null;
+    clientGrants: ClientGrant[] | null;
+    connections: Asset[] | null;
+    customDomains: Management.CustomDomain[] | null;
+    databases: Asset[] | null;
+    emailProvider: Asset | null;
+    emailTemplates: Asset[] | null;
+    guardianFactorProviders: Asset[] | null;
+    guardianFactors: Asset[] | null;
+    guardianFactorTemplates: Asset[] | null;
+    guardianPhoneFactorMessageTypes: {
+        message_types: Asset[];
+    } | null;
+    guardianPhoneFactorSelectedProvider: Asset | null;
+    guardianPolicies: {
+        policies: string[];
+    } | null;
+    hooks: Asset[] | null;
+    logStreams: LogStream[] | null;
+    organizations: Asset[] | null;
+    pages: Page[] | null;
+    prompts: Prompts | null;
+    resourceServers: Management.ResourceServer[] | null;
+    roles: Asset[] | null;
+    rules: Asset[] | null;
+    rulesConfigs: Asset[] | null;
+    tenant: Tenant | null;
+    triggers: Asset[] | null;
+    supplementalSignals: SupplementalSignals | null;
+    exclude?: {
+        [key: string]: string[];
+    };
+    include?: {
+        [key: string]: string[];
+    };
+    clientsOrig: Asset[] | null;
+    themes: Theme[] | null;
+    forms: Form[] | null;
+    flows: Flow[] | null;
+    flowVaultConnections: FlowVaultConnection[] | null;
+    selfServiceProfiles: SsProfileWithCustomText[] | null;
+    networkACLs: NetworkACL[] | null;
+    userAttributeProfiles: UserAttributeProfile[] | null;
+    userAttributeProfilesWithId: UserAttributeProfile[] | null;
+    connectionProfiles: Asset[] | null;
+    tokenExchangeProfiles: TokenExchangeProfile[] | null;
+}>;
+export type CalculatedChanges = {
+    del: Asset[];
+    update: Asset[];
+    conflicts: Asset[];
+    create: Asset[];
+};
+export type DetailedDryRunChange = {
+    action: 'CREATE' | 'UPDATE' | 'DELETE';
+    identifier: string;
+    details?: any;
+};
+export type DetailedDryRunChanges = {
+    [key: string]: {
+        created: number;
+        updated: number;
+        deleted: number;
+        changes: DetailedDryRunChange[];
+    };
+};
+export type AssetTypes = 'rules' | 'rulesConfigs' | 'hooks' | 'pages' | 'databases' | 'clientGrants' | 'resourceServers' | 'clients' | 'connections' | 'tenant' | 'emailProvider' | 'emailTemplates' | 'guardianFactors' | 'guardianFactorProviders' | 'guardianFactorTemplates' | 'guardianPhoneFactorMessageTypes' | 'guardianPhoneFactorSelectedProvider' | 'guardianPolicies' | 'roles' | 'actions' | 'actionModules' | 'organizations' | 'triggers' | 'attackProtection' | 'riskAssessment' | 'branding' | 'phoneProviders' | 'phoneTemplates' | 'logStreams' | 'prompts' | 'customDomains' | 'themes' | 'forms' | 'flows' | 'flowVaultConnections' | 'selfServiceProfiles' | 'networkACLs' | 'userAttributeProfiles' | 'connectionProfiles' | 'tokenExchangeProfiles' | 'supplementalSignals';
+export type KeywordMappings = {
+    [key: string]: (string | number)[] | string | number;
+};
+export type ParsedAsset<Key extends AssetTypes, T> = {
+    [key in Key]: T | null;
+};
+export declare const languages: readonly ["am", "ar", "ar-EG", "ar-SA", "az", "bg", "bn", "bs", "ca-ES", "cnr", "cs", "cy", "da", "de", "el", "en", "en-CA", "es", "es-419", "es-AR", "es-MX", "et", "eu-ES", "fa", "fi", "fr", "fr-CA", "fr-FR", "gl-ES", "gu", "he", "hi", "hr", "hu", "hy", "id", "is", "it", "ja", "ka", "kk", "kn", "ko", "lt", "lv", "mk", "ml", "mn", "mr", "ms", "my", "nb", "nl", "nn", "no", "pa", "pl", "pt", "pt-BR", "pt-PT", "ro", "ru", "sk", "sl", "so", "sq", "sr", "sv", "sw", "ta", "te", "th", "tl", "tr", "uk", "ur", "vi", "zgh", "zh-CN", "zh-HK", "zh-TW"];
+export type Language = (typeof languages)[number];
+export {};

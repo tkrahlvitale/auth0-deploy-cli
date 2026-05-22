@@ -1,0 +1,27 @@
+import DefaultHandler from './default';
+import { Assets, Asset } from '../../../types';
+export declare const supportedTemplates: string[];
+export declare const schema: {
+    type: string;
+    items: {
+        type: string;
+        properties: {
+            template: {
+                type: string;
+                enum: string[];
+            };
+            body: {
+                type: string;
+                default: string;
+            };
+        };
+        required: string[];
+    };
+};
+export default class EmailTemplateHandler extends DefaultHandler {
+    constructor(options: DefaultHandler);
+    objString(item: any): string;
+    getType(): Promise<Asset>;
+    updateOrCreate(emailTemplate: any): Promise<void>;
+    processChanges(assets: Assets): Promise<void>;
+}
